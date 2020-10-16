@@ -4,12 +4,13 @@
 #include <iostream>
 #include <fstream>
 #include <math.h>
+#include <time.h> 
 
 using namespace std;
 
-int algebraic_complement(int** data, int i_ex, int j_ex, int dim) {
+double algebraic_complement(double** data, int i_ex, int j_ex, int dim) {
 	if (dim == 3) {
-		int sum = 
+		double sum = 
 			(data[0][0] * data[1][1] * data[2][2] + data[0][1] * data[1][2] * data[2][0]
 			+ data[1][0] * data[2][1] * data[0][2] - data[0][2] * data[1][1] * data[2][0]
 			- data[2][1] * data[1][2] * data[0][0] - data[1][0] * data[0][1] * data[2][2]);
@@ -23,9 +24,9 @@ int algebraic_complement(int** data, int i_ex, int j_ex, int dim) {
 		return data[0][0];
 	}
 
-	int** minor = new int* [dim - 1];
+	double** minor = new double* [dim - 1];
 	for (int i = 0; i < dim - 1; i++) {
-		minor[i] = new int[dim - 1];
+		minor[i] = new double[dim - 1];
 	}
 
 	//for (int i = 0; i < dim; i++) {
@@ -56,7 +57,7 @@ int algebraic_complement(int** data, int i_ex, int j_ex, int dim) {
 	//}
 	//cout << endl;
 
-	int sum = 0;
+	double sum = 0;
 	if (dim - 1 == 3)
 		sum = (minor[0][0] * minor[1][1] * minor[2][2] + minor[0][1] * minor[1][2] * minor[2][0]
 			+ minor[1][0] * minor[2][1] * minor[0][2] - minor[0][2] * minor[1][1] * minor[2][0]
@@ -79,7 +80,7 @@ int algebraic_complement(int** data, int i_ex, int j_ex, int dim) {
 
 	//cout << sum * (int)pow(-1, i_ex + j_ex) << endl;
 
-	return sum * (int)pow(-1, i_ex + j_ex);
+	return sum * pow(-1, i_ex + j_ex);
 }
 
 int main(int* argc, char** argv) {
@@ -100,15 +101,19 @@ int main(int* argc, char** argv) {
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
-	int** matrix;
+	double** matrix;
+	double rank_res[1];
+	rank_res[0] = 0.0;
 
 	if (rank == 0) {
+		clock_t t;
+		t = clock();
 		ifstream matrix_data("matrix_data.txt");
 		matrix_data >> n;
-		matrix = new int* [n];
+		matrix = new double* [n];
 
 		for (int i = 0; i < n; i++) {
-			matrix[i] = new int[n];
+			matrix[i] = new double[n];
 			for (int j = 0; j < n; j++) {
 				int temp;
 				matrix_data >> temp;
@@ -125,41 +130,54 @@ int main(int* argc, char** argv) {
 		{
 			MPI_Send(&n, 1, MPI_INT, p, 99, MPI_COMM_WORLD);
 			for (int k = 0; k < n; k++) {
-				MPI_Send(matrix[k], n, MPI_INT, p, 99, MPI_COMM_WORLD);
+				MPI_Send(matrix[k], n, MPI_DOUBLE, p, 99, MPI_COMM_WORLD);
 			}
 		}
 
+		double sum = 0;
+
 		for (int i = (rank + 0) * (n / numtasks + n % numtasks); i < (rank + 1) * (n / numtasks + n % numtasks) && i < n; i++) {
-			//cout << "Call " << i << "For rank " << rank << endl;
+			//cout << "Call " << i << " for rank " << rank << endl;
+			sum += matrix[0][i] * algebraic_complement(matrix, 0, i, n);
 		}
 
-		int sum = 0;
-		for (int j = 0; j < n; j++) {
-			auto temp = algebraic_complement(matrix, 0, j, n);
-			sum += matrix[0][j] * temp;
-			//cout << "matrix[0][" << j << "] = " << matrix[0][j] << endl;
-			//cout << "algebraic_complement(matrix, 0," << j << ", " << n << ") = " << temp << endl;;
+		for (int p = 1; p < numtasks; p++) {
+			MPI_Recv(&rank_res, 1, MPI_DOUBLE, p, 99, MPI_COMM_WORLD, &st);
+			sum += rank_res[0];
 		}
+
+		//for (int j = 0; j < n; j++) {
+		//	auto temp = algebraic_complement(matrix, 0, j, n);
+		//	sum += matrix[0][j] * temp;
+		//	//cout << "matrix[0][" << j << "] = " << matrix[0][j] << endl;
+		//	//cout << "algebraic_complement(matrix, 0," << j << ", " << n << ") = " << temp << endl;;
+		//}
 
 		cout << "RESULT: " << sum << endl;
 
 		for (int i = 0; i < n; i++)
 			delete [] matrix[i];
 		delete[] matrix;
+		t = clock() - t;
+		cout << "It tooks " << (double)t / CLOCKS_PER_SEC << " seconds" << endl;
 	}
 	else {
 		MPI_Recv(&n, 1, MPI_INT, 0, 99, MPI_COMM_WORLD, &st);
 		//cout << "Rank " << rank << "has element " << n << endl;
-		matrix = new int* [n];
+		matrix = new double* [n];
 		for (int i = 0; i < n; i++) {
-			matrix[i] = new int[n];
-			MPI_Recv(matrix[i], n, MPI_INT, 0, 99, MPI_COMM_WORLD, &st);
+			matrix[i] = new double[n];
+			MPI_Recv(matrix[i], n, MPI_DOUBLE, 0, 99, MPI_COMM_WORLD, &st);
 		}
 
+		rank_res[0] = 0;
 		//cout << "Rank " << rank << "has matrix[rank][rank] element " << matrix[rank][rank] << endl;
-		//for (int i = (rank + 0) * (n / numtasks + n % numtasks); i < (rank + 1) * (n / numtasks + n % numtasks) && i < n; i++) {
-		//	cout << "Call " << i << "For rank " << rank << endl;
-		//}
+		for (int i = (rank + 0) * (n / numtasks + n % numtasks); i < (rank + 1) * (n / numtasks + n % numtasks) && i < n; i++) {
+			//cout << "Call " << i << " for rank " << rank << endl;
+			rank_res[0] += matrix[0][i] * algebraic_complement(matrix, 0, i, n);
+		}
+
+		MPI_Send(&rank_res, 1, MPI_DOUBLE, 0, 99, MPI_COMM_WORLD);
 
 		for (int i = 0; i < n; i++)
 			delete[] matrix[i];
