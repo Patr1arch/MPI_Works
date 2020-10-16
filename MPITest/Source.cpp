@@ -3,11 +3,83 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <math.h>
 
 using namespace std;
 
-int algebraic_complement(int** data) {
-	return 0;
+int algebraic_complement(int** data, int i_ex, int j_ex, int dim) {
+	if (dim == 3) {
+		int sum = 
+			(data[0][0] * data[1][1] * data[2][2] + data[0][1] * data[1][2] * data[2][0]
+			+ data[1][0] * data[2][1] * data[0][2] - data[0][2] * data[1][1] * data[2][0]
+			- data[2][1] * data[1][2] * data[0][0] - data[1][0] * data[0][1] * data[2][2]);
+		//cout << sum << " " << endl;
+		return sum;
+	}
+	else if (dim == 2) {
+		return data[0][0] * data[1][1] - data[1][0] * data[0][1];
+	}
+	else if (dim == 1) {
+		return data[0][0];
+	}
+
+	int** minor = new int* [dim - 1];
+	for (int i = 0; i < dim - 1; i++) {
+		minor[i] = new int[dim - 1];
+	}
+
+	//for (int i = 0; i < dim; i++) {
+	//	for (int j = 0; j < dim; j++) {
+	//		cout << data[i][j] << " ";
+	//	}
+	//	cout << endl;
+	//}
+	//cout << endl;
+
+	for (int i = 0, row_i = 0; i < dim; i++) {
+		if (i == i_ex) continue;
+		for (int j = 0, col_j = 0; j < dim; j++) {
+			if (j == j_ex) continue;
+			minor[row_i][col_j++] = data[i][j];
+			//cout << data[i][j] << " ";
+		}
+		row_i++;
+		//cout << endl;
+	}
+	//cout << endl;
+
+	//for (int i = 0; i < dim - 1; i++) {
+	//	for (int j = 0; j < dim - 1; j++) {
+	//		cout << minor[i][j] << " ";
+	//	}
+	//	cout << endl;
+	//}
+	//cout << endl;
+
+	int sum = 0;
+	if (dim - 1 == 3)
+		sum = (minor[0][0] * minor[1][1] * minor[2][2] + minor[0][1] * minor[1][2] * minor[2][0]
+			+ minor[1][0] * minor[2][1] * minor[0][2] - minor[0][2] * minor[1][1] * minor[2][0]
+			- minor[2][1] * minor[1][2] * minor[0][0] - minor[1][0] * minor[0][1] * minor[2][2]);
+	else {
+		for (int j = 0; j < dim - 1; j++) {
+			sum += minor[0][j] * algebraic_complement(minor, 0, j, dim - 1);
+		}
+	}
+
+	//cout << "Sum = " << sum << endl;
+
+	for (int i = 0; i < dim - 1; i++)
+		delete[] minor[i];
+	delete[] minor;
+
+	//cout << i_ex + j_ex << endl;
+
+	//cout << (int)pow(-1, i_ex + j_ex) << endl;
+
+	//cout << sum * (int)pow(-1, i_ex + j_ex) << endl;
+
+	return sum * (int)pow(-1, i_ex + j_ex);
 }
 
 int main(int* argc, char** argv) {
@@ -58,8 +130,18 @@ int main(int* argc, char** argv) {
 		}
 
 		for (int i = (rank + 0) * (n / numtasks + n % numtasks); i < (rank + 1) * (n / numtasks + n % numtasks) && i < n; i++) {
-			cout << "Call " << i << "For rank " << rank << endl;
+			//cout << "Call " << i << "For rank " << rank << endl;
 		}
+
+		int sum = 0;
+		for (int j = 0; j < n; j++) {
+			auto temp = algebraic_complement(matrix, 0, j, n);
+			sum += matrix[0][j] * temp;
+			//cout << "matrix[0][" << j << "] = " << matrix[0][j] << endl;
+			//cout << "algebraic_complement(matrix, 0," << j << ", " << n << ") = " << temp << endl;;
+		}
+
+		cout << "RESULT: " << sum << endl;
 
 		for (int i = 0; i < n; i++)
 			delete [] matrix[i];
@@ -67,17 +149,17 @@ int main(int* argc, char** argv) {
 	}
 	else {
 		MPI_Recv(&n, 1, MPI_INT, 0, 99, MPI_COMM_WORLD, &st);
-		cout << "Rank " << rank << "has element " << n << endl;
+		//cout << "Rank " << rank << "has element " << n << endl;
 		matrix = new int* [n];
 		for (int i = 0; i < n; i++) {
 			matrix[i] = new int[n];
 			MPI_Recv(matrix[i], n, MPI_INT, 0, 99, MPI_COMM_WORLD, &st);
 		}
 
-		cout << "Rank " << rank << "has matrix[rank][rank] element " << matrix[rank][rank] << endl;
-		for (int i = (rank + 0) * (n / numtasks + n % numtasks); i < (rank + 1) * (n / numtasks + n % numtasks) && i < n; i++) {
-			cout << "Call " << i << "For rank " << rank << endl;
-		}
+		//cout << "Rank " << rank << "has matrix[rank][rank] element " << matrix[rank][rank] << endl;
+		//for (int i = (rank + 0) * (n / numtasks + n % numtasks); i < (rank + 1) * (n / numtasks + n % numtasks) && i < n; i++) {
+		//	cout << "Call " << i << "For rank " << rank << endl;
+		//}
 
 		for (int i = 0; i < n; i++)
 			delete[] matrix[i];
