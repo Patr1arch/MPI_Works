@@ -98,6 +98,7 @@ int main(int* argc, char** argv) {
 
 	MPI_Init(argc, &argv);
 	MPI_Status st;
+	double start, end;
 
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
@@ -105,9 +106,12 @@ int main(int* argc, char** argv) {
 	double rank_res[1];
 	rank_res[0] = 0.0;
 
+	MPI_Barrier(MPI_COMM_WORLD);
+	start = MPI_Wtime();
+
 	if (rank == 0) {
-		clock_t t;
-		t = clock();
+		//clock_t t;
+		//t = clock();
 		ifstream matrix_data("matrix_data.txt");
 		matrix_data >> n;
 		matrix = new double* [n];
@@ -115,7 +119,7 @@ int main(int* argc, char** argv) {
 		for (int i = 0; i < n; i++) {
 			matrix[i] = new double[n];
 			for (int j = 0; j < n; j++) {
-				int temp;
+				double temp;
 				matrix_data >> temp;
 				matrix[i][j] = temp;
 			}
@@ -135,8 +139,8 @@ int main(int* argc, char** argv) {
 		}
 
 		double sum = 0;
-
-		for (int i = (rank + 0) * (n / numtasks + n % numtasks); i < (rank + 1) * (n / numtasks + n % numtasks) && i < n; i++) {
+			//int i = (rank + 0) * (n / numtasks + n % numtasks); i < (rank + 1)* (n / numtasks + n % numtasks) && i < n; i++
+		for (int i = 0; i < n; i += numtasks) {
 			//cout << "Call " << i << " for rank " << rank << endl;
 			sum += matrix[0][i] * algebraic_complement(matrix, 0, i, n);
 		}
@@ -158,8 +162,8 @@ int main(int* argc, char** argv) {
 		for (int i = 0; i < n; i++)
 			delete [] matrix[i];
 		delete[] matrix;
-		t = clock() - t;
-		cout << "It tooks " << (double)t / CLOCKS_PER_SEC << " seconds" << endl;
+		//t = clock() - t;
+		//cout << "It tooks " << (double)t / CLOCKS_PER_SEC << " seconds" << endl;
 	}
 	else {
 		MPI_Recv(&n, 1, MPI_INT, 0, 99, MPI_COMM_WORLD, &st);
@@ -172,7 +176,7 @@ int main(int* argc, char** argv) {
 
 		rank_res[0] = 0;
 		//cout << "Rank " << rank << "has matrix[rank][rank] element " << matrix[rank][rank] << endl;
-		for (int i = (rank + 0) * (n / numtasks + n % numtasks); i < (rank + 1) * (n / numtasks + n % numtasks) && i < n; i++) {
+		for (int i = rank; i < n; i += numtasks) {
 			//cout << "Call " << i << " for rank " << rank << endl;
 			rank_res[0] += matrix[0][i] * algebraic_complement(matrix, 0, i, n);
 		}
@@ -184,6 +188,12 @@ int main(int* argc, char** argv) {
 		delete[] matrix;
 	}
 
+	MPI_Barrier(MPI_COMM_WORLD); 
+	end = MPI_Wtime();
+
 	//printf("MPItest from process - %d, total number of process - %d\n", rank, numtasks);
 	MPI_Finalize();
+	if (rank == 1) {
+		cout << "It took: " << end - start << endl;
+	}
 }
